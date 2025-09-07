@@ -1,515 +1,906 @@
-.lua
--[[
-Script Oficial !KINGMODSCRACKED Westbound
-Inclui: ESP Jogadores, ESP Itens Valiosos, Gun Mod, Mansion Status, CMDs, e AIMBOT (silent aim no player mais próximo até 500m)
-Comandos:
-.gun mod / .gun mod0
-.esp / .esp0
-.search / .search0
-.mansion
-.cmds
-.aimbot (ativa/desativa)
---]]
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Carregar biblioteca de notificações
-local Notification = loadstring(game:HttpGet("https://raw.githubusercontent.com/Eazvy/UILibs/main/Notifications/Hood/Notification.lua"))()
-
--- Notificação inicial
-Notification.new({
-    Title = "Script Inicializado",
-    Text = "Feito por !KINGMODSCRACKED\nDigite .cmds para ver todos os comandos!",
-    Duration = 7
-})
-
+-- Configuração inicial
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local Camera = Workspace.CurrentCamera
 
--- Variáveis globais
-local espActive = false
-local gunModActive = false
-local itemESPActive = false
-local aimbotEnabled = false
-local billboard_distance = 20
-local itemHighlights = {}
-local hooked = false
-local itemNames = {
-    "$20", "Diamond", "Ruby", "Emerald", "Sapphire", "Gem", "RareStone", "PreciousStone", "GoldNugget", "SilverNugget",
-    "GoldBar", "SilverBar", "TreasureChest", "Coin", "Jewel", "Necklace", "Ring", "Crown", "Artifact", "Relic"
+-- Configurações globais
+local Settings = {
+    GunMod = {
+        Enabled = false,
+        BulletSpeed = 1000,
+        ReloadSpeed = 1,
+        DamageMultiplier = 1,
+        NoRecoil = false,
+        NoSpread = false,
+        InfiniteAmmo = false
+    },
+    Aimbot = {
+        Enabled = false,
+        FOV = 50,
+        Smoothness = 0.1,
+        TeamCheck = true,
+        VisibleCheck = true,
+        Keybind = Enum.UserInputType.MouseButton2,
+        TargetPart = "Head",
+        FOVCircleVisible = true
+    },
+    ESP = {
+        Enabled = false,
+        OutlawColor = Color3.fromRGB(255, 0, 0),
+        SheriffColor = Color3.fromRGB(255, 255, 0),
+        CivilColor = Color3.fromRGB(0, 255, 0),
+        ShowNames = true,
+        ShowDistance = true,
+        ShowHealth = true,
+        ShowTeam = true,
+        MaxDistance = 1000
+    },
+    Movement = {
+        SpeedHack = false,
+        SpeedValue = 25,
+        JumpPower = false,
+        JumpValue = 50,
+        Noclip = false
+    },
+    Visuals = {
+        FullBright = false,
+        TimeChanger = false,
+        TimeValue = 12
+    }
 }
 
--- Função de notificação personalizada
-local function Notify(title, text, duration)
-    Notification.new({
-        Title = title,
-        Text = text,
-        Duration = duration or 5
+-- Todos os temas disponíveis do Rayfield
+local Themes = {
+    "Default",
+    "Dark",
+    "Light",
+    "Midnight",
+    "Serika",
+    "Jester",
+    "Cyber",
+    "Ocean",
+    "Crimson",
+    "Amethyst",
+    "Emerald",
+    "Sunset",
+    "Neon",
+    "Synapse",
+    "Serpent",
+    "Leopard",
+    "Zebra",
+    "Galaxy",
+    "Cherry",
+    "Lava",
+    "Sand",
+    "Candy",
+    "Royal",
+    "Rainbow"
+}
+
+-- Localizações do Westbound
+local Locations = {
+    ["Blackwater"] = CFrame.new(-120, 5, 370),
+    ["Armadillo"] = CFrame.new(550, 6, 530),
+    ["Tumbleweed"] = CFrame.new(1120, 7, 200),
+    ["Saint Denis"] = CFrame.new(-450, 4, -220),
+    ["Valentine"] = CFrame.new(150, 8, -120),
+    ["Strawberry"] = CFrame.new(-800, 15, 200),
+    ["Annesburg"] = CFrame.new(900, 10, -500),
+    ["Van Horn"] = CFrame.new(750, 5, -400),
+    ["Rhodes"] = CFrame.new(-200, 6, -350),
+    ["Emerald Ranch"] = CFrame.new(200, 7, -250),
+    ["Braithwaite Manor"] = CFrame.new(-350, 5, -450),
+    ["Shady Belle"] = CFrame.new(-600, 4, -550),
+    ["Lagras"] = CFrame.new(-750, 3, -650),
+    ["Colter"] = CFrame.new(1200, 30, 800),
+    ["Mount Hagen"] = CFrame.new(1500, 50, 900),
+    ["Benedict Point"] = CFrame.new(800, 20, 400),
+    ["Quaker's Cove"] = CFrame.new(-1000, 3, 100),
+    ["Fort Wallace"] = CFrame.new(400, 15, -600),
+    ["Window Rock"] = CFrame.new(1300, 25, 300),
+    ["Manzanita Post"] = CFrame.new(-900, 10, 50)
+}
+
+-- Variáveis globais
+local ESPObjects = {}
+local AimbotTarget = nil
+local FOVCircle = nil
+local OriginalGunSettings = {}
+local NoclipConnection = nil
+local OriginalWalkSpeed = 16
+local OriginalJumpPower = 50
+
+-- Inicializar Rayfield
+local Window = Rayfield:CreateWindow({
+    Name = "Westbound Ultimate Menu",
+    LoadingTitle = "Westbound Professional Hack",
+    LoadingSubtitle = "Loaded successfully",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "WestboundConfig",
+        FileName = "ProfessionalConfig"
+    },
+    Discord = {
+        Enabled = true,
+        Invite = "discord.gg/sirius",
+        RememberJoins = true
+    },
+    KeySystem = true,
+    KeySettings = {
+        Title = "Westbound Key System",
+        Subtitle = "Enter key to continue",
+        Note = "Join discord.gg/sirius for key",
+        FileName = "WestboundKey",
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = "WESTBOUNDPRO123"
+    }
+})
+
+-- Função utilitária para verificar se o jogador está em time
+local function GetPlayerTeam(player)
+    if player then
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                local team = humanoid:GetAttribute("Team") or "Civil"
+                return team
+            end
+        end
+    end
+    return "Civil"
+end
+
+-- Função para obter cor do time
+local function GetTeamColor(player)
+    local team = GetPlayerTeam(player)
+    if team == "Outlaw" then
+        return Settings.ESP.OutlawColor
+    elseif team == "Sheriff" then
+        return Settings.ESP.SheriffColor
+    elseif team == "Deputy" then
+        return Color3.fromRGB(0, 0, 255) -- Azul para deputados
+    else
+        return Settings.ESP.CivilColor
+    end
+end
+
+-- Função para obter nome do time
+local function GetTeamName(player)
+    local team = GetPlayerTeam(player)
+    return team
+end
+
+-- Função para verificar se o jogador é visível
+local function IsPlayerVisible(player)
+    if not player.Character or not player.Character:FindFirstChild("Head") then
+        return false
+    end
+    
+    local origin = Camera.CFrame.Position
+    local target = player.Character.Head.Position
+    local direction = (target - origin).Unit
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    
+    local result = Workspace:Raycast(origin, direction * (target - origin).Magnitude, raycastParams)
+    
+    if result then
+        local hitPart = result.Instance
+        return hitPart and hitPart:IsDescendantOf(player.Character)
+    end
+    
+    return true
+end
+
+-- Criação do FOV Circle para Aimbot
+local function CreateFOVCircle()
+    if FOVCircle then
+        FOVCircle:Remove()
+    end
+    
+    FOVCircle = Drawing.new("Circle")
+    FOVCircle.Visible = Settings.Aimbot.FOVCircleVisible
+    FOVCircle.Radius = Settings.Aimbot.FOV
+    FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+    FOVCircle.Thickness = 2
+    FOVCircle.Filled = false
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    return FOVCircle
+end
+
+-- Sistema de Gun Mod
+local function ApplyGunMod()
+    for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool:FindFirstChild("GunScript") then
+            if not OriginalGunSettings[tool.Name] then
+                OriginalGunSettings[tool.Name] = {
+                    BulletSpeed = tool:FindFirstChild("BulletSpeed") and tool.BulletSpeed.Value or 1000,
+                    ReloadTime = tool:FindFirstChild("ReloadTime") and tool.ReloadTime.Value or 1,
+                    Damage = tool:FindFirstChild("Damage") and tool.Damage.Value or 10
+                }
+            end
+            
+            if Settings.GunMod.Enabled then
+                if tool:FindFirstChild("BulletSpeed") then
+                    tool.BulletSpeed.Value = Settings.GunMod.BulletSpeed
+                end
+                
+                if tool:FindFirstChild("ReloadTime") then
+                    tool.ReloadTime.Value = Settings.GunMod.ReloadSpeed
+                end
+                
+                if tool:FindFirstChild("Damage") then
+                    tool.Damage.Value = OriginalGunSettings[tool.Name].Damage * Settings.GunMod.DamageMultiplier
+                end
+            else
+                if OriginalGunSettings[tool.Name] then
+                    if tool:FindFirstChild("BulletSpeed") then
+                        tool.BulletSpeed.Value = OriginalGunSettings[tool.Name].BulletSpeed
+                    end
+                    
+                    if tool:FindFirstChild("ReloadTime") then
+                        tool.ReloadTime.Value = OriginalGunSettings[tool.Name].ReloadTime
+                    end
+                    
+                    if tool:FindFirstChild("Damage") then
+                        tool.Damage.Value = OriginalGunSettings[tool.Name].Damage
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Sistema de ESP
+local function CreateESP(player)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            if obj then
+                obj:Remove()
+            end
+        end
+    end
+    
+    ESPObjects[player] = {}
+    
+    -- Highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.Adornee = player.Character
+    highlight.FillColor = GetTeamColor(player)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Parent = player.Character
+    table.insert(ESPObjects[player], highlight)
+    
+    -- Billboard GUI para informações
+    if Settings.ESP.ShowNames or Settings.ESP.ShowDistance or Settings.ESP.ShowHealth or Settings.ESP.ShowTeam then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESP_Info"
+        billboard.Adornee = player.Character.Head
+        billboard.Size = UDim2.new(0, 200, 0, 100)
+        billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = player.Character.Head
+        
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = billboard
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "Name"
+        nameLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextStrokeTransparency = 0
+        nameLabel.TextSize = 14
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Parent = frame
+        
+        local teamLabel = Instance.new("TextLabel")
+        teamLabel.Name = "Team"
+        teamLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        teamLabel.Position = UDim2.new(0, 0, 0.25, 0)
+        teamLabel.BackgroundTransparency = 1
+        teamLabel.Text = "Team: " .. GetTeamName(player)
+        teamLabel.TextColor3 = GetTeamColor(player)
+        teamLabel.TextStrokeTransparency = 0
+        teamLabel.TextSize = 12
+        teamLabel.Font = Enum.Font.Gotham
+        teamLabel.Parent = frame
+        
+        local distanceLabel = Instance.new("TextLabel")
+        distanceLabel.Name = "Distance"
+        distanceLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        distanceLabel.BackgroundTransparency = 1
+        distanceLabel.Text = "Distance: " .. math.floor((player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m"
+        distanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        distanceLabel.TextStrokeTransparency = 0
+        distanceLabel.TextSize = 12
+        distanceLabel.Font = Enum.Font.Gotham
+        distanceLabel.Parent = frame
+        
+        local healthLabel = Instance.new("TextLabel")
+        healthLabel.Name = "Health"
+        healthLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        healthLabel.Position = UDim2.new(0, 0, 0.75, 0)
+        healthLabel.BackgroundTransparency = 1
+        healthLabel.Text = "Health: " .. math.floor(player.Character.Humanoid.Health) .. "/" .. math.floor(player.Character.Humanoid.MaxHealth)
+        healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        healthLabel.TextStrokeTransparency = 0
+        healthLabel.TextSize = 12
+        healthLabel.Font = Enum.Font.Gotham
+        healthLabel.Parent = frame
+        
+        table.insert(ESPObjects[player], billboard)
+    end
+end
+
+-- Sistema de Aimbot
+local function FindAimbotTarget()
+    local closestPlayer = nil
+    local closestDistance = Settings.Aimbot.FOV
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            if Settings.Aimbot.TeamCheck and GetPlayerTeam(player) == GetPlayerTeam(LocalPlayer) then
+                continue
+            end
+            
+            if Settings.Aimbot.VisibleCheck and not IsPlayerVisible(player) then
+                continue
+            end
+            
+            local targetPart = player.Character:FindFirstChild(Settings.Aimbot.TargetPart)
+            if targetPart then
+                local screenPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                
+                if onScreen then
+                    local mousePosition = UserInputService:GetMouseLocation()
+                    local distance = (Vector2.new(screenPosition.X, screenPosition.Y) - Vector2.new(mousePosition.X, mousePosition.Y)).Magnitude
+                    
+                    if distance <= closestDistance then
+                        closestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Sistema de teleporte suave
+local function SmoothTeleport(cframe)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then
+        return
+    end
+    
+    -- Salvar estado original
+    local originalWalkSpeed = humanoid.WalkSpeed
+    local originalJumpPower = humanoid.JumpPower
+    
+    -- Configurar para teleporte
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    
+    -- Criar tween suave
+    local tweenInfo = TweenInfo.new(
+        1, -- Duração
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out,
+        0, -- Repetições
+        false, -- Reversa
+        0 -- Delay
+    )
+    
+    local tween = TweenService:Create(character.HumanoidRootPart, tweenInfo, {CFrame = cframe})
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        humanoid.WalkSpeed = originalWalkSpeed
+        humanoid.JumpPower = originalJumpPower
+    end)
+end
+
+-- Sistema Noclip
+local function EnableNoclip()
+    if NoclipConnection then
+        NoclipConnection:Disconnect()
+    end
+    
+    NoclipConnection = RunService.Stepped:Connect(function()
+        if Settings.Movement.Noclip and LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+-- Sistema FullBright
+local function EnableFullBright()
+    if Settings.Visuals.FullBright then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Ambient = Color3.new(0, 0, 0)
+        Lighting.Brightness = 1
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 10000
+        Lighting.GlobalShadows = true
+    end
+end
+
+-- Criação das abas e elementos da interface
+local MainTab = Window:CreateTab("Principal", 4483362458)
+local CombatTab = Window:CreateTab("Combat", 4804404326)
+local VisualTab = Window:CreateTab("Visual", 7040410130)
+local MovementTab = Window:CreateTab("Movimento", 3944680095)
+local TeleportTab = Window:CreateTab("Teleporte", 9738830483)
+local SettingsTab = Window:CreateTab("Configurações", 9753922268)
+
+-- Seção de Temas
+local ThemeSection = SettingsTab:CreateSection("Temas")
+local ThemeDropdown = SettingsTab:CreateDropdown({
+    Name = "Selecionar Tema",
+    Options = Themes,
+    CurrentOption = "Default",
+    Flag = "ThemeDropdown",
+    Callback = function(Option)
+        Rayfield:SetTheme(Option)
+    end,
+})
+
+-- Seção Gun Mod
+local GunModSection = CombatTab:CreateSection("Gun Mod")
+local GunModToggle = CombatTab:CreateToggle({
+    Name = "Ativar Gun Mod",
+    CurrentValue = false,
+    Flag = "GunModToggle",
+    Callback = function(Value)
+        Settings.GunMod.Enabled = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Velocidade da Bala",
+    Range = {100, 5000},
+    Increment = 50,
+    Suffix = "units",
+    CurrentValue = 1000,
+    Flag = "BulletSpeedSlider",
+    Callback = function(Value)
+        Settings.GunMod.BulletSpeed = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Velocidade de Recarga",
+    Range = {0.1, 5},
+    Increment = 0.1,
+    Suffix = "s",
+    CurrentValue = 1,
+    Flag = "ReloadSpeedSlider",
+    Callback = function(Value)
+        Settings.GunMod.ReloadSpeed = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Multiplicador de Dano",
+    Range = {1, 10},
+    Increment = 0.5,
+    Suffix = "x",
+    CurrentValue = 1,
+    Flag = "DamageMultiplierSlider",
+    Callback = function(Value)
+        Settings.GunMod.DamageMultiplier = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Sem Recoil",
+    CurrentValue = false,
+    Flag = "NoRecoilToggle",
+    Callback = function(Value)
+        Settings.GunMod.NoRecoil = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Sem Spread",
+    CurrentValue = false,
+    Flag = "NoSpreadToggle",
+    Callback = function(Value)
+        Settings.GunMod.NoSpread = Value
+        ApplyGunMod()
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Munição Infinita",
+    CurrentValue = false,
+    Flag = "InfiniteAmmoToggle",
+    Callback = function(Value)
+        Settings.GunMod.InfiniteAmmo = Value
+        ApplyGunMod()
+    end,
+})
+
+-- Seção Aimbot
+local AimbotSection = CombatTab:CreateSection("Aimbot")
+local AimbotToggle = CombatTab:CreateToggle({
+    Name = "Ativar Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value)
+        Settings.Aimbot.Enabled = Value
+        if Value then
+            CreateFOVCircle()
+        elseif FOVCircle then
+            FOVCircle.Visible = false
+        end
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "FOV",
+    Range = {10, 500},
+    Increment = 5,
+    Suffix = "units",
+    CurrentValue = 50,
+    Flag = "FOVSlider",
+    Callback = function(Value)
+        Settings.Aimbot.FOV = Value
+        if FOVCircle then
+            FOVCircle.Radius = Value
+        end
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Suavização",
+    Range = {0, 1},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.1,
+    Flag = "SmoothnessSlider",
+    Callback = function(Value)
+        Settings.Aimbot.Smoothness = Value
+    end,
+})
+
+CombatTab:CreateDropdown({
+    Name = "Parte do Corpo",
+    Options = {"Head", "UpperTorso", "HumanoidRootPart"},
+    CurrentOption = "Head",
+    Flag = "TargetPartDropdown",
+    Callback = function(Option)
+        Settings.Aimbot.TargetPart = Option
+    end,
+})
+
+CombatTab:CreateKeybind({
+    Name = "Tecla do Aimbot",
+    CurrentKeybind = Enum.UserInputType.MouseButton2,
+    HoldToInteract = false,
+    Flag = "AimbotKeybind",
+    Callback = function(Keybind)
+        Settings.Aimbot.Keybind = Keybind
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Verificar Time",
+    CurrentValue = true,
+    Flag = "TeamCheckToggle",
+    Callback = function(Value)
+        Settings.Aimbot.TeamCheck = Value
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Verificar Visibilidade",
+    CurrentValue = true,
+    Flag = "VisibleCheckToggle",
+    Callback = function(Value)
+        Settings.Aimbot.VisibleCheck = Value
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Mostrar FOV Circle",
+    CurrentValue = true,
+    MovementTab:CreateSlider({
+    Name = "Força do Pulso",
+    Range = {50, 200},
+    Increment = 5,
+    Suffix = "units",
+    CurrentValue = 50,
+    Flag = "JumpValueSlider",
+    Callback = function(Value)
+        Settings.Movement.JumpValue = Value
+        if Settings.Movement.JumpPower and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpPower = Value
+        end
+    end,
+})
+
+MovementTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Flag = "NoclipToggle",
+    Callback = function(Value)
+        Settings.Movement.Noclip = Value
+        EnableNoclip()
+    end,
+})
+
+-- Seção Teleporte
+local TeleportSection = TeleportTab:CreateSection("Locais de Teleporte")
+
+for locationName, cframe in pairs(Locations) do
+    TeleportTab:CreateButton({
+        Name = locationName,
+        Callback = function()
+            SmoothTeleport(cframe)
+            Rayfield:Notify({
+                Title = "Teleporte",
+                Content = "Teleportando para " .. locationName,
+                Duration = 3,
+                Image = 4483362458
+            })
+        end,
     })
 end
 
--- ESP Jogadores
-function enableESP()
-    espActive = true
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local char = player.Character
-            if not char:FindFirstChild("PlayerESP") then
-                local esp = Instance.new("Highlight")
-                esp.Name = "PlayerESP"
-                esp.FillColor = Color3.fromRGB(0,255,0)
-                esp.OutlineColor = Color3.fromRGB(0,255,0)
-                esp.FillTransparency = 0.5
-                esp.OutlineTransparency = 0
-                esp.Parent = char
-            end
-        end
-    end
-    Notify("ESP", "Destacando jogadores em verde!", 5)
-end
-
-function disableESP()
-    espActive = false
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then
-            for _, v in ipairs(player.Character:GetChildren()) do
-                if v:IsA("Highlight") and v.Name == "PlayerESP" then
-                    v:Destroy()
+TeleportTab:CreateButton({
+    Name = "Teleporte para Jogador Mais Próximo",
+    Callback = function()
+        local closestPlayer = nil
+        local closestDistance = math.huge
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
                 end
             end
         end
-    end
-    Notify("ESP", "ESP desativado!", 5)
-end
+        
+        if closestPlayer then
+            SmoothTeleport(closestPlayer.Character.HumanoidRootPart.CFrame)
+            Rayfield:Notify({
+                Title = "Teleporte",
+                Content = "Teleportando para " .. closestPlayer.Name,
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
 
--- Gun Mod
-function enableGunMod()
-    gunModActive = true
-    local success, list = pcall(function()
-        return require(ReplicatedStorage.GunScripts.GunStats)
-    end)
-    
-    if success and type(list) == "table" then
-        for i, v in pairs(list) do
-            v.Spread = 0
-            v.prepTime = 0.1
-            v.eqTime = 0.1
-            v.MaxShots = math.huge
-            v.ReloadSpeed = 0.1
-            v.BulletSpeed = 250
-            v.HipFireAccuracy = 0
-            v.ZoomAccuracy = 0
-            v.Recoil = 0
-            v.Damage = 100
-        end
-        Notify("Gun Mod", "Todas as armas modificadas!", 5)
-    else
-        -- Tentativa alternativa para encontrar as armas
-        for _, tool in ipairs(Workspace:GetDescendants()) do
-            if tool:IsA("Tool") and tool:FindFirstChild("Config") then
-                local config = tool.Config
-                if config:FindFirstChild("FireRate") then config.FireRate.Value = 0.05 end
-                if config:FindFirstChild("ReloadSpeed") then config.ReloadSpeed.Value = 0.1 end
-                if config:FindFirstChild("Spread") then config.Spread.Value = 0 end
-            end
-        end
-        Notify("Gun Mod", "Armas modificadas (método alternativo)!", 5)
-    end
-end
+-- Seção Configurações
+local ConfigSection = SettingsTab:CreateSection("Configurações")
+SettingsTab:CreateButton({
+    Name = "Salvar Configurações",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+        Rayfield:Notify({
+            Title = "Configurações",
+            Content = "Configurações salvas com sucesso!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
 
-function disableGunMod()
-    gunModActive = false
-    local success, list = pcall(function()
-        return require(ReplicatedStorage.GunScripts.GunStats)
-    end)
-    
-    if success and type(list) == "table" then
-        for i, v in pairs(list) do
-            v.Spread = 2
-            v.prepTime = 1
-            v.eqTime = 1
-            v.MaxShots = 6
-            v.ReloadSpeed = 1
-            v.BulletSpeed = 80
-            v.HipFireAccuracy = 2
-            v.ZoomAccuracy = 1
-            v.Recoil = 1
-            v.Damage = 25
-        end
-        Notify("Gun Mod", "Gun Mod desativado!", 5)
-    else
-        for _, tool in ipairs(Workspace:GetDescendants()) do
-            if tool:IsA("Tool") and tool:FindFirstChild("Config") then
-                local config = tool.Config
-                if config:FindFirstChild("FireRate") then config.FireRate.Value = 0.2 end
-                if config:FindFirstChild("ReloadSpeed") then config.ReloadSpeed.Value = 1 end
-                if config:FindFirstChild("Spread") then config.Spread.Value = 2 end
-            end
-        end
-        Notify("Gun Mod", "Armas restauradas (método alternativo)!", 5)
-    end
-end
+SettingsTab:CreateButton({
+    Name = "Carregar Configurações",
+    Callback = function()
+        Rayfield:LoadConfiguration()
+        Rayfield:Notify({
+            Title = "Configurações",
+            Content = "Configurações carregadas com sucesso!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
 
--- Billboard minimalista: time aparece perto
-function updateBillboards()
-    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Head") then return end
+SettingsTab:CreateButton({
+    Name = "Resetar Configurações",
+    Callback = function()
+        Rayfield:ResetConfiguration()
+        Rayfield:Notify({
+            Title = "Configurações",
+            Content = "Configurações resetadas!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Loops principais
+RunService.RenderStepped:Connect(function()
+    -- Atualizar FOV Circle
+    if FOVCircle then
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Radius = Settings.Aimbot.FOV
+        FOVCircle.Visible = Settings.Aimbot.FOVCircleVisible and Settings.Aimbot.Enabled
+    end
     
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local char = player.Character
-            local head = char.Head
-            local bb = head:FindFirstChild("ESPLabel")
-            local dist = (LocalPlayer.Character.Head.Position - head.Position).magnitude
+    -- Aimbot
+    if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Settings.Aimbot.Keybind) then
+        AimbotTarget = FindAimbotTarget()
+        
+        if AimbotTarget and AimbotTarget.Character and AimbotTarget.Character:FindFirstChild(Settings.Aimbot.TargetPart) then
+            local targetPart = AimbotTarget.Character[Settings.Aimbot.TargetPart]
+            local camera = Workspace.CurrentCamera
             
-            if dist <= billboard_distance then
-                if not bb then
-                    bb = Instance.new("BillboardGui")
-                    bb.Name = "ESPLabel"
-                    bb.Adornee = head
-                    bb.Size = UDim2.new(0, 70, 0, 20)
-                    bb.StudsOffset = Vector3.new(0, 1.5, 0)
-                    bb.AlwaysOnTop = true
-                    
-                    local lbl = Instance.new("TextLabel")
-                    lbl.Size = UDim2.new(1, 0, 1, 0)
-                    lbl.BackgroundTransparency = 1
-                    lbl.BorderSizePixel = 0
-                    
-                    local teamName = player.Team and player.Team.Name or "Sem time"
-                    if teamName:lower():find("outlaw") then
-                        lbl.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    elseif teamName:lower():find("sheriff") then
-                        lbl.TextColor3 = Color3.fromRGB(255, 255, 0)
+            if targetPart and camera then
+                local targetPosition = targetPart.Position
+                local cameraPosition = camera.CFrame.Position
+                local direction = (targetPosition - cameraPosition).Unit
+                
+                local currentLook = camera.CFrame.LookVector
+                local newLook = currentLook:Lerp(direction, Settings.Aimbot.Smoothness)
+                
+                camera.CFrame = CFrame.new(cameraPosition, cameraPosition + newLook)
+            end
+        end
+    else
+        AimbotTarget = nil
+    end
+    
+    -- ESP
+    if Settings.ESP.Enabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+                local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                
+                if distance <= Settings.ESP.MaxDistance then
+                    if not ESPObjects[player] then
+                        CreateESP(player)
                     else
-                        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        -- Atualizar ESP existente
+                        for _, obj in pairs(ESPObjects[player]) do
+                            if obj:IsA("Highlight") then
+                                obj.FillColor = GetTeamColor(player)
+                            elseif obj:IsA("BillboardGui") and obj:FindFirstChild("Frame") then
+                                local frame = obj.Frame
+                                if frame:FindFirstChild("Team") then
+                                    frame.Team.Text = "Team: " .. GetTeamName(player)
+                                    frame.Team.TextColor3 = GetTeamColor(player)
+                                end
+                                if frame:FindFirstChild("Distance") then
+                                    frame.Distance.Text = "Distance: " .. math.floor(distance) .. "m"
+                                end
+                                if frame:FindFirstChild("Health") then
+                                    frame.Health.Text = "Health: " .. math.floor(player.Character.Humanoid.Health) .. "/" .. math.floor(player.Character.Humanoid.MaxHealth)
+                                end
+                            end
+                        end
                     end
-                    
-                    lbl.Text = teamName
-                    lbl.TextStrokeTransparency = 0.7
-                    lbl.Font = Enum.Font.SourceSansBold
-                    lbl.TextScaled = true
-                    lbl.Parent = bb
-                    bb.Parent = head
                 else
-                    local lbl = bb:FindFirstChildOfClass("TextLabel")
-                    local teamName = player.Team and player.Team.Name or "Sem time"
-                    lbl.Text = teamName
-                    
-                    if teamName:lower():find("outlaw") then
-                        lbl.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    elseif teamName:lower():find("sheriff") then
-                        lbl.TextColor3 = Color3.fromRGB(255, 255, 0)
-                    else
-                        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    -- Remover ESP se estiver muito longe
+                    if ESPObjects[player] then
+                        for _, obj in pairs(ESPObjects[player]) do
+                            if obj then
+                                obj:Remove()
+                            end
+                        end
+                        ESPObjects[player] = nil
                     end
-                    
-                    bb.Enabled = true
                 end
             else
-                if bb then bb.Enabled = false end
-            end
-        end
-    end
-end
-
--- Mansion status
-local function checkMansion()
-    local mansionStatus = "Desconhecido"
-    local found = false
-    
-    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-        if tostring(obj.Name):lower():find("mansion") or tostring(obj.Name):lower():find("haunted") then
-            if obj:IsA("BoolValue") or obj:IsA("StringValue") then
-                if obj.Value == true or tostring(obj.Value):lower():find("open") then
-                    mansionStatus = "ABERTA"
-                else
-                    mansionStatus = "FECHADA"
-                end
-                found = true
-                break
-            elseif obj:IsA("BindableEvent") then
-                mansionStatus = "Status desconhecido (evento detectado)"
-                found = true
-                break
-            end
-        end
-    end
-    
-    -- Verificar também no Workspace
-    if not found then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if tostring(obj.Name):lower():find("mansion") or tostring(obj.Name):lower():find("haunted") then
-                if obj:IsA("BoolValue") or obj:IsA("StringValue") then
-                    if obj.Value == true or tostring(obj.Value):lower():find("open") then
-                        mansionStatus = "ABERTA"
-                    else
-                        mansionStatus = "FECHADA"
-                    end
-                    found = true
-                    break
-                end
-            end
-        end
-    end
-    
-    if not found then mansionStatus = "Status não encontrado" end
-    
-    Notify("Status Mansão", "Mansão Assombrada: " .. mansionStatus, 8)
-end
-
--- ESP Itens Valiosos
-function clearItemESP()
-    for _, obj in ipairs(itemHighlights) do
-        if obj and obj.Parent then obj:Destroy() end
-    end
-    itemHighlights = {}
-    
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("Highlight") and desc.Name == "ValuableItemESP" then
-            desc:Destroy()
-        end
-    end
-    
-    itemESPActive = false
-    Notify("Item ESP", "ESP de itens valiosos desativado!", 5)
-end
-
-function enableItemESP()
-    clearItemESP()
-    itemESPActive = true
-    local found = 0
-    
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local isItem = false
-        for _, name in ipairs(itemNames) do
-            if string.lower(tostring(obj.Name)):find(string.lower(name)) then
-                isItem = true
-                break
-            end
-        end
-        
-        if isItem and (obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("Part")) then
-            found = found + 1
-            if not obj:FindFirstChild("ValuableItemESP") then
-                local esp = Instance.new("Highlight")
-                esp.Name = "ValuableItemESP"
-                esp.FillColor = Color3.fromRGB(0, 200, 255)
-                esp.OutlineColor = Color3.fromRGB(255, 0, 255)
-                esp.FillTransparency = 0.2
-                esp.OutlineTransparency = 0
-                esp.Parent = obj
-                table.insert(itemHighlights, esp)
-            end
-        end
-    end
-    
-    if found > 0 then
-        Notify("Item ESP", "Itens valiosos encontrados: " .. found, 6)
-    else
-        Notify("Item ESP", "Nenhum item valioso encontrado!", 6)
-    end
-end
-
--- CMDs função
-function showCmds()
-    local txt = [[
-Comandos disponíveis:
-
-.gun mod      = Gun Mod ativar
-.gun mod0     = Gun Mod desativar
-
-.esp          = ESP jogadores ativar
-.esp0         = ESP jogadores desativar
-
-.search       = ESP itens valiosos ativar
-.search0      = ESP itens valiosos desativar
-
-.mansion      = Status mansão assombrada
-.cmds         = Mostrar comandos
-
-.aimbot       = Aimbot (silent aim) ativar/desativar
-    ]]
-    
-    Notify("Comandos do Script", txt, 12)
-end
-
--- AIMBOT (Silent Aim)
-local function getClosestPlayer()
-    local myChar = LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    
-    local myPos = myChar.HumanoidRootPart.Position
-    local closest, dist = nil, 500
-    
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChildOfClass("Humanoid") then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hum.Health > 0 then
-                local d = (plr.Character.HumanoidRootPart.Position - myPos).Magnitude
-                if d < dist then
-                    closest = plr
-                    dist = d
-                end
-            end
-        end
-    end
-    
-    return closest
-end
-
-function enableAimbot()
-    if aimbotEnabled then 
-        Notify("Aimbot", "Aimbot já ativado!", 4)
-        return 
-    end
-    
-    aimbotEnabled = true
-    Notify("Aimbot", "Aimbot ativado!", 4)
-    
-    -- Silent Aim universal (hook FireServer e Raycast)
-    if not hooked then
-        hooked = true
-        
-        -- Hook para RemoteEvents
-        local oldFireServer
-        oldFireServer = hookfunction(Instance.new("RemoteEvent").FireServer, function(self, ...)
-            if aimbotEnabled and self.Name:lower():find("shoot") or self.Name:lower():find("fire") then
-                local closest = getClosestPlayer()
-                if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
-                    local args = {...}
-                    for k = 1, #args do
-                        if typeof(args[k]) == "Vector3" then
-                            args[k] = closest.Character.HumanoidRootPart.Position
+                -- Remover ESP se o jogador não existir mais
+                if ESPObjects[player] then
+                    for _, obj in pairs(ESPObjects[player]) do
+                        if obj then
+                            obj:Remove()
                         end
                     end
-                    return oldFireServer(self, unpack(args))
+                    ESPObjects[player] = nil
                 end
             end
-            return oldFireServer(self, ...)
-        end)
-        
-        -- Hook para Raycast
-        local oldRaycast = workspace.Raycast
-        workspace.Raycast = function(origin, direction, params, ...)
-            if aimbotEnabled then
-                local closest = getClosestPlayer()
-                if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
-                    local targetPos = closest.Character.HumanoidRootPart.Position
-                    direction = (targetPos - origin).Unit * direction.Magnitude
-                end
-            end
-            return oldRaycast(origin, direction, params, ...)
         end
     end
-end
-
-function disableAimbot()
-    if not aimbotEnabled then 
-        Notify("Aimbot", "Aimbot já desativado!", 4)
-        return 
+    
+    -- Time Changer
+    if Settings.Visuals.TimeChanger then
+        Lighting.ClockTime = Settings.Visuals.TimeValue
     end
     
-    aimbotEnabled = false
-    Notify("Aimbot", "Aimbot desativado!", 4)
-end
+    -- FullBright
+    if Settings.Visuals.FullBright then
+        EnableFullBright()
+    end
+end)
 
--- Auto-ESP para novos jogadores
+-- Conexões de eventos
 Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(char)
-        if espActive then
-            task.wait(1)
-            if not char:FindFirstChild("PlayerESP") then
-                local esp = Instance.new("Highlight")
-                esp.Name = "PlayerESP"
-                esp.FillColor = Color3.fromRGB(0, 255, 0)
-                esp.OutlineColor = Color3.fromRGB(0, 255, 0)
-                esp.FillTransparency = 0.5
-                esp.OutlineTransparency = 0
-                esp.Parent = char
-            end
+    player.CharacterAdded:Connect(function(character)
+        if Settings.ESP.Enabled then
+            wait(1) -- Esperar o personagem carregar completamente
+            CreateESP(player)
         end
     end)
 end)
 
--- Atualizar ESP quando um jogador mudar de time
-local function setupTeamChangeListener()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            player:GetPropertyChangedSignal("Team"):Connect(function()
-                if espActive and player.Character then
-                    for _, v in ipairs(player.Character:GetChildren()) do
-                        if v:IsA("Highlight") and v.Name == "PlayerESP" then
-                            v:Destroy()
-                        end
-                    end
-                    task.wait(0.1)
-                    enableESP()
-                end
-            end)
-        end
-    end
-end
-
-setupTeamChangeListener()
-
--- Comandos do chat
-LocalPlayer.Chatted:Connect(function(chat)
-    chat = chat:lower()
-    
-    if chat:find("%.gun mod0") then
-        disableGunMod()
-    elseif chat:find("%.gun mod") then
-        enableGunMod()
-    elseif chat:find("%.esp0") then
-        disableESP()
-    elseif chat:find("%.esp") then
-        enableESP()
-    elseif chat:find("%.mansion") then
-        checkMansion()
-    elseif chat:find("%.search0") then
-        clearItemESP()
-    elseif chat:find("%.search") then
-        enableItemESP()
-    elseif chat:find("%.cmds") then
-        showCmds()
-    elseif chat:find("%.aimbot") then
-        if aimbotEnabled then
-            disableAimbot()
-        else
-            enableAimbot()
-        end
-    end
-end)
-
--- Loop de atualização
-RunService.RenderStepped:Connect(function()
-    updateBillboards()
-    
-    -- Auto-reaplicar ESP se estiver ativo
-    if espActive then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and not player.Character:FindFirstChild("PlayerESP") then
-                enableESP()
-                break
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            if obj then
+                obj:Remove()
             end
         end
+        ESPObjects[player] = nil
     end
 end)
 
--- Mensagem inicial aimbot
-task.wait(2)
-Notify("Aimbot", "Digite .aimbot no chat para ativar/desativar.\nTiro acerta o jogador mais próximo (até 500m).", 6)
-
--- Limpeza ao sair
-game:GetService("UserInputService").WindowFocused:Connect(function()
-    if not aimbotEnabled then return end
+LocalPlayer.CharacterAdded:Connect(function(character)
+    OriginalWalkSpeed = 16
+    OriginalJumpPower = 50
     
-    -- Reaplicar hooks se necessário
-    if not hooked then
-        hooked = true
-        enableAimbot()
+    if Settings.Movement.SpeedHack then
+        character:WaitForChild("Humanoid").WalkSpeed = Settings.Movement.SpeedValue
+    end
+    
+    if Settings.Movement.JumpPower then
+        character:WaitForChild("Humanoid").JumpPower = Settings.Movement.JumpValue
     end
 end)
 
-print("✅ Script !KINGMODSCRACKED Westbound carregado com sucesso!")
+-- Inicialização
+CreateFOVCircle()
+Rayfield:Notify({
+    Title = "Westbound Menu",
+    Content = "Menu carregado com sucesso!",
+    Duration = 5,
+    Image = 4483362458
+})
+
+print("Westbound Professional Menu loaded successfully!")
