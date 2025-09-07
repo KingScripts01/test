@@ -1,0 +1,515 @@
+.lua
+-[[
+Script Oficial !KINGMODSCRACKED Westbound
+Inclui: ESP Jogadores, ESP Itens Valiosos, Gun Mod, Mansion Status, CMDs, e AIMBOT (silent aim no player mais próximo até 500m)
+Comandos:
+.gun mod / .gun mod0
+.esp / .esp0
+.search / .search0
+.mansion
+.cmds
+.aimbot (ativa/desativa)
+--]]
+
+-- Carregar biblioteca de notificações
+local Notification = loadstring(game:HttpGet("https://raw.githubusercontent.com/Eazvy/UILibs/main/Notifications/Hood/Notification.lua"))()
+
+-- Notificação inicial
+Notification.new({
+    Title = "Script Inicializado",
+    Text = "Feito por !KINGMODSCRACKED\nDigite .cmds para ver todos os comandos!",
+    Duration = 7
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Variáveis globais
+local espActive = false
+local gunModActive = false
+local itemESPActive = false
+local aimbotEnabled = false
+local billboard_distance = 20
+local itemHighlights = {}
+local hooked = false
+local itemNames = {
+    "$20", "Diamond", "Ruby", "Emerald", "Sapphire", "Gem", "RareStone", "PreciousStone", "GoldNugget", "SilverNugget",
+    "GoldBar", "SilverBar", "TreasureChest", "Coin", "Jewel", "Necklace", "Ring", "Crown", "Artifact", "Relic"
+}
+
+-- Função de notificação personalizada
+local function Notify(title, text, duration)
+    Notification.new({
+        Title = title,
+        Text = text,
+        Duration = duration or 5
+    })
+end
+
+-- ESP Jogadores
+function enableESP()
+    espActive = true
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            if not char:FindFirstChild("PlayerESP") then
+                local esp = Instance.new("Highlight")
+                esp.Name = "PlayerESP"
+                esp.FillColor = Color3.fromRGB(0,255,0)
+                esp.OutlineColor = Color3.fromRGB(0,255,0)
+                esp.FillTransparency = 0.5
+                esp.OutlineTransparency = 0
+                esp.Parent = char
+            end
+        end
+    end
+    Notify("ESP", "Destacando jogadores em verde!", 5)
+end
+
+function disableESP()
+    espActive = false
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            for _, v in ipairs(player.Character:GetChildren()) do
+                if v:IsA("Highlight") and v.Name == "PlayerESP" then
+                    v:Destroy()
+                end
+            end
+        end
+    end
+    Notify("ESP", "ESP desativado!", 5)
+end
+
+-- Gun Mod
+function enableGunMod()
+    gunModActive = true
+    local success, list = pcall(function()
+        return require(ReplicatedStorage.GunScripts.GunStats)
+    end)
+    
+    if success and type(list) == "table" then
+        for i, v in pairs(list) do
+            v.Spread = 0
+            v.prepTime = 0.1
+            v.eqTime = 0.1
+            v.MaxShots = math.huge
+            v.ReloadSpeed = 0.1
+            v.BulletSpeed = 250
+            v.HipFireAccuracy = 0
+            v.ZoomAccuracy = 0
+            v.Recoil = 0
+            v.Damage = 100
+        end
+        Notify("Gun Mod", "Todas as armas modificadas!", 5)
+    else
+        -- Tentativa alternativa para encontrar as armas
+        for _, tool in ipairs(Workspace:GetDescendants()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("Config") then
+                local config = tool.Config
+                if config:FindFirstChild("FireRate") then config.FireRate.Value = 0.05 end
+                if config:FindFirstChild("ReloadSpeed") then config.ReloadSpeed.Value = 0.1 end
+                if config:FindFirstChild("Spread") then config.Spread.Value = 0 end
+            end
+        end
+        Notify("Gun Mod", "Armas modificadas (método alternativo)!", 5)
+    end
+end
+
+function disableGunMod()
+    gunModActive = false
+    local success, list = pcall(function()
+        return require(ReplicatedStorage.GunScripts.GunStats)
+    end)
+    
+    if success and type(list) == "table" then
+        for i, v in pairs(list) do
+            v.Spread = 2
+            v.prepTime = 1
+            v.eqTime = 1
+            v.MaxShots = 6
+            v.ReloadSpeed = 1
+            v.BulletSpeed = 80
+            v.HipFireAccuracy = 2
+            v.ZoomAccuracy = 1
+            v.Recoil = 1
+            v.Damage = 25
+        end
+        Notify("Gun Mod", "Gun Mod desativado!", 5)
+    else
+        for _, tool in ipairs(Workspace:GetDescendants()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("Config") then
+                local config = tool.Config
+                if config:FindFirstChild("FireRate") then config.FireRate.Value = 0.2 end
+                if config:FindFirstChild("ReloadSpeed") then config.ReloadSpeed.Value = 1 end
+                if config:FindFirstChild("Spread") then config.Spread.Value = 2 end
+            end
+        end
+        Notify("Gun Mod", "Armas restauradas (método alternativo)!", 5)
+    end
+end
+
+-- Billboard minimalista: time aparece perto
+function updateBillboards()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Head") then return end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local char = player.Character
+            local head = char.Head
+            local bb = head:FindFirstChild("ESPLabel")
+            local dist = (LocalPlayer.Character.Head.Position - head.Position).magnitude
+            
+            if dist <= billboard_distance then
+                if not bb then
+                    bb = Instance.new("BillboardGui")
+                    bb.Name = "ESPLabel"
+                    bb.Adornee = head
+                    bb.Size = UDim2.new(0, 70, 0, 20)
+                    bb.StudsOffset = Vector3.new(0, 1.5, 0)
+                    bb.AlwaysOnTop = true
+                    
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1, 0, 1, 0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.BorderSizePixel = 0
+                    
+                    local teamName = player.Team and player.Team.Name or "Sem time"
+                    if teamName:lower():find("outlaw") then
+                        lbl.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    elseif teamName:lower():find("sheriff") then
+                        lbl.TextColor3 = Color3.fromRGB(255, 255, 0)
+                    else
+                        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                    
+                    lbl.Text = teamName
+                    lbl.TextStrokeTransparency = 0.7
+                    lbl.Font = Enum.Font.SourceSansBold
+                    lbl.TextScaled = true
+                    lbl.Parent = bb
+                    bb.Parent = head
+                else
+                    local lbl = bb:FindFirstChildOfClass("TextLabel")
+                    local teamName = player.Team and player.Team.Name or "Sem time"
+                    lbl.Text = teamName
+                    
+                    if teamName:lower():find("outlaw") then
+                        lbl.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    elseif teamName:lower():find("sheriff") then
+                        lbl.TextColor3 = Color3.fromRGB(255, 255, 0)
+                    else
+                        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                    
+                    bb.Enabled = true
+                end
+            else
+                if bb then bb.Enabled = false end
+            end
+        end
+    end
+end
+
+-- Mansion status
+local function checkMansion()
+    local mansionStatus = "Desconhecido"
+    local found = false
+    
+    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+        if tostring(obj.Name):lower():find("mansion") or tostring(obj.Name):lower():find("haunted") then
+            if obj:IsA("BoolValue") or obj:IsA("StringValue") then
+                if obj.Value == true or tostring(obj.Value):lower():find("open") then
+                    mansionStatus = "ABERTA"
+                else
+                    mansionStatus = "FECHADA"
+                end
+                found = true
+                break
+            elseif obj:IsA("BindableEvent") then
+                mansionStatus = "Status desconhecido (evento detectado)"
+                found = true
+                break
+            end
+        end
+    end
+    
+    -- Verificar também no Workspace
+    if not found then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if tostring(obj.Name):lower():find("mansion") or tostring(obj.Name):lower():find("haunted") then
+                if obj:IsA("BoolValue") or obj:IsA("StringValue") then
+                    if obj.Value == true or tostring(obj.Value):lower():find("open") then
+                        mansionStatus = "ABERTA"
+                    else
+                        mansionStatus = "FECHADA"
+                    end
+                    found = true
+                    break
+                end
+            end
+        end
+    end
+    
+    if not found then mansionStatus = "Status não encontrado" end
+    
+    Notify("Status Mansão", "Mansão Assombrada: " .. mansionStatus, 8)
+end
+
+-- ESP Itens Valiosos
+function clearItemESP()
+    for _, obj in ipairs(itemHighlights) do
+        if obj and obj.Parent then obj:Destroy() end
+    end
+    itemHighlights = {}
+    
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("Highlight") and desc.Name == "ValuableItemESP" then
+            desc:Destroy()
+        end
+    end
+    
+    itemESPActive = false
+    Notify("Item ESP", "ESP de itens valiosos desativado!", 5)
+end
+
+function enableItemESP()
+    clearItemESP()
+    itemESPActive = true
+    local found = 0
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        local isItem = false
+        for _, name in ipairs(itemNames) do
+            if string.lower(tostring(obj.Name)):find(string.lower(name)) then
+                isItem = true
+                break
+            end
+        end
+        
+        if isItem and (obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("Part")) then
+            found = found + 1
+            if not obj:FindFirstChild("ValuableItemESP") then
+                local esp = Instance.new("Highlight")
+                esp.Name = "ValuableItemESP"
+                esp.FillColor = Color3.fromRGB(0, 200, 255)
+                esp.OutlineColor = Color3.fromRGB(255, 0, 255)
+                esp.FillTransparency = 0.2
+                esp.OutlineTransparency = 0
+                esp.Parent = obj
+                table.insert(itemHighlights, esp)
+            end
+        end
+    end
+    
+    if found > 0 then
+        Notify("Item ESP", "Itens valiosos encontrados: " .. found, 6)
+    else
+        Notify("Item ESP", "Nenhum item valioso encontrado!", 6)
+    end
+end
+
+-- CMDs função
+function showCmds()
+    local txt = [[
+Comandos disponíveis:
+
+.gun mod      = Gun Mod ativar
+.gun mod0     = Gun Mod desativar
+
+.esp          = ESP jogadores ativar
+.esp0         = ESP jogadores desativar
+
+.search       = ESP itens valiosos ativar
+.search0      = ESP itens valiosos desativar
+
+.mansion      = Status mansão assombrada
+.cmds         = Mostrar comandos
+
+.aimbot       = Aimbot (silent aim) ativar/desativar
+    ]]
+    
+    Notify("Comandos do Script", txt, 12)
+end
+
+-- AIMBOT (Silent Aim)
+local function getClosestPlayer()
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local myPos = myChar.HumanoidRootPart.Position
+    local closest, dist = nil, 500
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChildOfClass("Humanoid") then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hum.Health > 0 then
+                local d = (plr.Character.HumanoidRootPart.Position - myPos).Magnitude
+                if d < dist then
+                    closest = plr
+                    dist = d
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+function enableAimbot()
+    if aimbotEnabled then 
+        Notify("Aimbot", "Aimbot já ativado!", 4)
+        return 
+    end
+    
+    aimbotEnabled = true
+    Notify("Aimbot", "Aimbot ativado!", 4)
+    
+    -- Silent Aim universal (hook FireServer e Raycast)
+    if not hooked then
+        hooked = true
+        
+        -- Hook para RemoteEvents
+        local oldFireServer
+        oldFireServer = hookfunction(Instance.new("RemoteEvent").FireServer, function(self, ...)
+            if aimbotEnabled and self.Name:lower():find("shoot") or self.Name:lower():find("fire") then
+                local closest = getClosestPlayer()
+                if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
+                    local args = {...}
+                    for k = 1, #args do
+                        if typeof(args[k]) == "Vector3" then
+                            args[k] = closest.Character.HumanoidRootPart.Position
+                        end
+                    end
+                    return oldFireServer(self, unpack(args))
+                end
+            end
+            return oldFireServer(self, ...)
+        end)
+        
+        -- Hook para Raycast
+        local oldRaycast = workspace.Raycast
+        workspace.Raycast = function(origin, direction, params, ...)
+            if aimbotEnabled then
+                local closest = getClosestPlayer()
+                if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetPos = closest.Character.HumanoidRootPart.Position
+                    direction = (targetPos - origin).Unit * direction.Magnitude
+                end
+            end
+            return oldRaycast(origin, direction, params, ...)
+        end
+    end
+end
+
+function disableAimbot()
+    if not aimbotEnabled then 
+        Notify("Aimbot", "Aimbot já desativado!", 4)
+        return 
+    end
+    
+    aimbotEnabled = false
+    Notify("Aimbot", "Aimbot desativado!", 4)
+end
+
+-- Auto-ESP para novos jogadores
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(char)
+        if espActive then
+            task.wait(1)
+            if not char:FindFirstChild("PlayerESP") then
+                local esp = Instance.new("Highlight")
+                esp.Name = "PlayerESP"
+                esp.FillColor = Color3.fromRGB(0, 255, 0)
+                esp.OutlineColor = Color3.fromRGB(0, 255, 0)
+                esp.FillTransparency = 0.5
+                esp.OutlineTransparency = 0
+                esp.Parent = char
+            end
+        end
+    end)
+end)
+
+-- Atualizar ESP quando um jogador mudar de time
+local function setupTeamChangeListener()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            player:GetPropertyChangedSignal("Team"):Connect(function()
+                if espActive and player.Character then
+                    for _, v in ipairs(player.Character:GetChildren()) do
+                        if v:IsA("Highlight") and v.Name == "PlayerESP" then
+                            v:Destroy()
+                        end
+                    end
+                    task.wait(0.1)
+                    enableESP()
+                end
+            end)
+        end
+    end
+end
+
+setupTeamChangeListener()
+
+-- Comandos do chat
+LocalPlayer.Chatted:Connect(function(chat)
+    chat = chat:lower()
+    
+    if chat:find("%.gun mod0") then
+        disableGunMod()
+    elseif chat:find("%.gun mod") then
+        enableGunMod()
+    elseif chat:find("%.esp0") then
+        disableESP()
+    elseif chat:find("%.esp") then
+        enableESP()
+    elseif chat:find("%.mansion") then
+        checkMansion()
+    elseif chat:find("%.search0") then
+        clearItemESP()
+    elseif chat:find("%.search") then
+        enableItemESP()
+    elseif chat:find("%.cmds") then
+        showCmds()
+    elseif chat:find("%.aimbot") then
+        if aimbotEnabled then
+            disableAimbot()
+        else
+            enableAimbot()
+        end
+    end
+end)
+
+-- Loop de atualização
+RunService.RenderStepped:Connect(function()
+    updateBillboards()
+    
+    -- Auto-reaplicar ESP se estiver ativo
+    if espActive then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and not player.Character:FindFirstChild("PlayerESP") then
+                enableESP()
+                break
+            end
+        end
+    end
+end)
+
+-- Mensagem inicial aimbot
+task.wait(2)
+Notify("Aimbot", "Digite .aimbot no chat para ativar/desativar.\nTiro acerta o jogador mais próximo (até 500m).", 6)
+
+-- Limpeza ao sair
+game:GetService("UserInputService").WindowFocused:Connect(function()
+    if not aimbotEnabled then return end
+    
+    -- Reaplicar hooks se necessário
+    if not hooked then
+        hooked = true
+        enableAimbot()
+    end
+end)
+
+print("✅ Script !KINGMODSCRACKED Westbound carregado com sucesso!")
